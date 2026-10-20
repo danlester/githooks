@@ -1,0 +1,15 @@
+#!/bin/bash
+# git hooks-update: pull the latest githooks and re-apply the install.
+set -e
+
+dir=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+before=$(git -C "$dir" rev-parse HEAD)
+git -C "$dir" pull --ff-only --quiet
+rm -f "$dir/.git/githooks-update-available"
+
+if [ "$(git -C "$dir" rev-parse HEAD)" = "$before" ]; then
+    echo "githooks already up to date."
+else
+    git -C "$dir" log --oneline "$before..HEAD"
+    "$dir/install.sh"
+fi

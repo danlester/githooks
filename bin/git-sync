@@ -1,0 +1,3 @@
+#!/bin/bash
+# git sync: fetch all remotes (pruning deleted branches) and fast-forward the current branch.
+git fetch --all --prune && git pull --ff-only

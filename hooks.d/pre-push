@@ -1,0 +1,27 @@
+#!/bin/bash
+# Refuse to re-create a remote branch that this local branch used to track,
+# i.e. one that was deleted on the remote (usually because its PR was merged).
+# Brand-new branches have no tracking config yet, so they push normally.
+
+remote=$1
+zero=0000000000000000000000000000000000000000
+blocked=0
+
+# Remote has no branches yet (e.g. first push after cloning an empty repo)
+[ -n "$(git for-each-ref --count=1 "refs/remotes/$remote/")" ] || exit 0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue  # deleting a remote branch
+    [ "$remote_sha" = "$zero" ] || continue # remote branch exists: normal push
+    branch=${local_ref#refs/heads/}
+    [ "$branch" != "$local_ref" ] || continue
+    if [ "$(git config "branch.$branch.remote")" = "$remote" ] &&
+        [ "$(git config "branch.$branch.merge")" = "$remote_ref" ]; then
+        echo "❌ '$branch' used to track ${remote_ref#refs/heads/} on $remote, which has since been deleted"
+        echo "   (probably a merged PR). Start a new branch with 'git new <name>',"
+        echo "   or push anyway with 'git push --no-verify'."
+        blocked=1
+    fi
+done
+
+exit $blocked

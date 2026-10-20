@@ -1,0 +1,33 @@
+#!/bin/bash
+# On branch switch: fetch, delete local branches whose remote branch is gone
+# (saving any unpushed work under refs/attic/), and warn if behind upstream.
+
+[ "$3" = "1" ] || exit 0                                        # branch switches only
+[ "$1" = "0000000000000000000000000000000000000000" ] && exit 0 # fresh clone
+git remote get-url origin >/dev/null 2>&1 || exit 0
+
+timeout_cmd=""
+command -v timeout >/dev/null 2>&1 && timeout_cmd="timeout 15"
+GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" \
+    $timeout_cmd git fetch --prune --quiet origin 2>/dev/null
+
+# Branches checked out in any worktree can't be deleted
+checked_out=$(git worktree list --porcelain | sed -n 's|^branch refs/heads/||p')
+
+git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads |
+    awk '$2 == "[gone]" {print $1}' |
+    while read -r branch; do
+        printf '%s\n' "$checked_out" | grep -qxF "$branch" && continue
+        if [ "$(git rev-list --count "$branch" --not --remotes)" -gt 0 ]; then
+            ref="refs/attic/$branch/$(date +%Y%m%d-%H%M%S)"
+            git update-ref "$ref" "$branch"
+            echo "🗄️  Saved '$branch' as $ref (it has commits not on any remote)"
+        fi
+        git branch -D "$branch" >/dev/null 2>&1 && echo "🧹 Deleted '$branch' (gone on remote)"
+    done
+
+behind=$(git rev-list --count HEAD..@{u} 2>/dev/null)
+if [ "${behind:-0}" -gt 0 ]; then
+    echo "⚠️  Your branch is $behind commit(s) behind its upstream. Run 'git pull' to update."
+fi
+exit 0

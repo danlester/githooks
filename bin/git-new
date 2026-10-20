@@ -1,0 +1,19 @@
+#!/bin/bash
+# git new <branch> [<base>]
+# Create a branch from the latest remote default branch (or <base>).
+# Uncommitted changes come along, as with any 'git switch'.
+set -e
+
+if [ -z "$1" ]; then
+    echo "Usage: git new <branch> [<base>]"
+    exit 1
+fi
+
+git fetch --quiet origin
+base=${2:-$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)}
+if [ -z "$base" ]; then
+    git remote set-head origin --auto >/dev/null 2>&1 || true
+    base=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)
+fi
+
+git switch --no-track -c "$1" "$base"

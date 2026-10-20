@@ -1,0 +1,30 @@
+#!/bin/bash
+# Every hook name in this directory is a symlink to this script.
+# It runs our global hook (hooks.d/<name>) if there is one, then the
+# repository's own .git/hooks/<name> if there is one, so setting
+# core.hooksPath globally doesn't disable per-repo hooks.
+
+name=$(basename "$0")
+self_dir=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+global_hook="$self_dir/../hooks.d/$name"
+local_hook="$(git rev-parse --git-common-dir 2>/dev/null)/hooks/$name"
+
+# Never call ourselves
+if [ -e "$local_hook" ] && [ "$(readlink -f "$local_hook")" = "$(readlink -f "$0")" ]; then
+    local_hook=""
+fi
+
+# These hooks receive data on stdin, which both hooks need to see
+case "$name" in
+    pre-push | post-rewrite) input=$(cat) ;;
+esac
+
+for hook in "$global_hook" "$local_hook"; do
+    [ -n "$hook" ] && [ -x "$hook" ] || continue
+    if [ -n "${input+x}" ]; then
+        printf '%s\n' "$input" | "$hook" "$@"
+    else
+        "$hook" "$@"
+    fi || exit $?
+done
+exit 0
